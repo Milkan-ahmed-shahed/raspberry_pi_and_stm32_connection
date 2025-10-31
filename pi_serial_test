@@ -1,1 +1,56 @@
-it has the python code needed to used in raspberry pu
+import serial
+import time
+
+# --- Configuration ---
+# This is the "door number" you just found!
+STM32_PORT = "/dev/ttyACM0"
+BAUD_RATE = 115200
+
+def connect_to_stm32():
+    try:
+        print(f"Connecting to STM32 on {STM32_PORT}...")
+        # The 'timeout=1' means ser.readline() will wait 1 second for a response
+        ser = serial.Serial(STM32_PORT, BAUD_RATE, timeout=1)
+        
+        # Wait 2 seconds for the STM32 to reset after connection
+        time.sleep(2)
+        print("Connection established.")
+        return ser
+        
+    except serial.SerialException as e:
+        print(f"Error: Could not connect to STM32. {e}")
+        return None
+
+def send_and_receive(serial_connection, message):
+    if serial_connection:
+        try:
+            # 1. Send the message to the STM32
+            print(f"Pi -> STM32: {message}")
+            serial_connection.write(message.encode('utf-8') + b'\n')
+            
+            # 2. Wait for and read the response
+            response = serial_connection.readline()
+            
+            if response:
+                # Decode the bytes back into a normal string
+                response_str = response.decode('utf-8').strip()
+                print(f"Pi <- STM32: {response_str}")
+            else:
+                print("Pi <- STM32: No response (timeout)")
+
+        except serial.SerialException as e:
+            print(f"Error during communication: {e}")
+
+def main():
+    stm32 = connect_to_stm32()
+    
+    if stm32:
+        # Send our test message
+        send_and_receive(stm32, "Pi says: Hello STM32!")
+        
+        # Close the connection
+        stm32.close()
+        print("Connection closed.")
+
+if __name__ == "__main__":
+    main()
