@@ -11,12 +11,6 @@
 /* Includes ------------------------------------------------------------------*/
 #include "usbd_cdc_if.h"
 #include <string.h>
-#include "main.h" /* for HAL_GPIO_* and GPIO_PIN defines */
-
-/* USER CONFIG: Debug LED pin (external) */
-#define DBG_LED_PORT GPIOB
-#define DBG_LED_PIN  GPIO_PIN_6
-/* Active-high LED: SET = ON, RESET = OFF */
 
 /* TX queue ------------------------------------------------------------------*/
 #define TX_QUEUE_DEPTH 4
@@ -25,6 +19,10 @@ static uint16_t tx_q_len[TX_QUEUE_DEPTH];
 static volatile uint8_t tx_q_head = 0;
 static volatile uint8_t tx_q_tail = 0;
 static volatile uint8_t tx_busy_flag = 0;
+
+/* Shared RX flag/buffer provided by main.c */
+//uint8_t g_usb_rx_buffer[RX_BUFFER_SIZE];
+//volatile uint8_t g_new_usb_data = 0;
 
 /* Forward declarations for CDC fops (must be before fops struct) */
 static int8_t CDC_Init_FS(void);
@@ -77,23 +75,17 @@ static int8_t CDC_Control_FS(uint8_t cmd, uint8_t* pbuf, uint16_t length)
   return (USBD_OK);
 }
 
-/* Receive: light LED ON (active-high) until TX complete turns it OFF */
+/* Receive: copy data into a small buffer and raise a flag for the main loop */
 static int8_t CDC_Receive_FS(uint8_t* Buf, uint32_t *Len)
 {
-  /* Indicate RX with LED ON */
-  HAL_GPIO_WritePin(DBG_LED_PORT, DBG_LED_PIN, GPIO_PIN_SET);
-
-  /* Enqueue echo (or your reply) */
-  uint32_t rlen32 = *Len;
-  uint16_t rlen = (rlen32 > APP_TX_DATA_SIZE) ? APP_TX_DATA_SIZE : (uint16_t)rlen32;
-  (void)CDC_Transmit_Enqueue(Buf, rlen);
+  uint32_t copy_len = (*Len < (RX_BUFFER_SIZE - 1)) ? *Len : (RX_BUFFER_SIZE - 1);
+  memcpy(g_usb_rx_buffer, Buf, copy_len);
+  g_usb_rx_buffer[copy_len] = '\0';
+  g_new_usb_data = 1;
 
   /* Re-arm reception */
   USBD_CDC_SetRxBuffer(&hUsbDeviceFS, &Buf[0]);
   USBD_CDC_ReceivePacket(&hUsbDeviceFS);
-
-  /* Nudge TX in case it was idle */
-  CDC_ProcessTxQueue();
 
   return (USBD_OK);
 }
@@ -146,7 +138,6 @@ void CDC_ProcessTxQueue(void)
   if (tx_busy_flag && hcdc && hcdc->TxState == 0)
   {
     tx_busy_flag = 0;
-    HAL_GPIO_WritePin(DBG_LED_PORT, DBG_LED_PIN, GPIO_PIN_RESET); /* TX done */
   }
 
   if (tx_busy_flag) return;
@@ -169,7 +160,6 @@ int8_t CDC_TransmitCplt_FS(uint8_t* Buf, uint32_t *Len, uint8_t epnum)
   (void)Buf; (void)Len; (void)epnum;
 
   tx_busy_flag = 0;
-  HAL_GPIO_WritePin(DBG_LED_PORT, DBG_LED_PIN, GPIO_PIN_RESET); /* TX done */
   CDC_ProcessTxQueue(); /* kick next */
 
   return (USBD_OK);
@@ -181,6 +171,5 @@ void USBD_CDC_TransmitCplt(USBD_HandleTypeDef *pdev, uint8_t epnum)
   (void)pdev; (void)epnum;
 
   tx_busy_flag = 0;
-  HAL_GPIO_WritePin(DBG_LED_PORT, DBG_LED_PIN, GPIO_PIN_RESET); /* TX done */
   CDC_ProcessTxQueue(); /* kick next */
 }

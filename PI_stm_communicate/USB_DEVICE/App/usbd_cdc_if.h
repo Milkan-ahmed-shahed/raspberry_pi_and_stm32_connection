@@ -25,6 +25,11 @@
 #define APP_RX_DATA_SIZE  1024
 #define APP_TX_DATA_SIZE  1024
 
+/* Small RX command buffer shared with main.c */
+#define RX_BUFFER_SIZE 64
+extern uint8_t g_usb_rx_buffer[RX_BUFFER_SIZE];
+extern volatile uint8_t g_new_usb_data;
+
 /* CDC Interface callback. */
 extern USBD_CDC_ItfTypeDef USBD_Interface_fops_FS;
 
