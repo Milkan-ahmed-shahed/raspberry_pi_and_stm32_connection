@@ -1,0 +1,168 @@
+/* USER CODE BEGIN Header */
+/**
+  ******************************************************************************
+  * @file           : usbd_cdc_if.c
+  * @version        : v2.0_Cube
+  * @brief          : Usb device for Virtual Com Port.
+  ******************************************************************************
+  */
+/* USER CODE END Header */
+
+/* Includes ------------------------------------------------------------------*/
+#include "usbd_cdc_if.h"
+#include <string.h>
+#include "main.h"
+
+/* USER CODE BEGIN PV */
+/* Private variables ---------------------------------------------------------*/
+#define TX_QUEUE_DEPTH 4
+static uint8_t tx_q_buf[TX_QUEUE_DEPTH][APP_TX_DATA_SIZE];
+static uint16_t tx_q_len[TX_QUEUE_DEPTH];
+static volatile uint8_t tx_q_head = 0; /* next free slot index */
+static volatile uint8_t tx_q_tail = 0; /* next slot to send */
+static volatile uint8_t tx_busy_flag = 0; /* 1 = a transfer is ongoing */
+/* USER CODE END PV */
+
+/* Forward declarations for the CDC functions used in the fops struct.
+   These must be visible before the USBD_Interface_fops_FS initializer. */
+static int8_t CDC_Init_FS(void);
+static int8_t CDC_DeInit_FS(void);
+static int8_t CDC_Control_FS(uint8_t cmd, uint8_t* pbuf, uint16_t length);
+static int8_t CDC_Receive_FS(uint8_t* pbuf, uint32_t *Len);
+
+/* Forward declarations for queue helpers */
+int  CDC_Transmit_Enqueue(uint8_t* Buf, uint16_t Len);
+void CDC_ProcessTxQueue(void);
+
+/* Create buffer for reception and transmission           */
+uint8_t UserRxBufferFS[APP_RX_DATA_SIZE];
+uint8_t UserTxBufferFS[APP_TX_DATA_SIZE];
+
+extern USBD_HandleTypeDef hUsbDeviceFS;
+
+/* Usbd interface structure (now references declared functions) */
+USBD_CDC_ItfTypeDef USBD_Interface_fops_FS =
+{
+  CDC_Init_FS,
+  CDC_DeInit_FS,
+  CDC_Control_FS,
+  CDC_Receive_FS
+};
+
+/* Initialize */
+static int8_t CDC_Init_FS(void)
+{
+  USBD_CDC_SetTxBuffer(&hUsbDeviceFS, UserTxBufferFS, 0);
+  USBD_CDC_SetRxBuffer(&hUsbDeviceFS, UserRxBufferFS);
+
+  /* Prepare to receive first packet */
+  USBD_CDC_ReceivePacket(&hUsbDeviceFS);
+  return (USBD_OK);
+}
+
+static int8_t CDC_DeInit_FS(void)
+{
+  return (USBD_OK);
+}
+
+static int8_t CDC_Control_FS(uint8_t cmd, uint8_t* pbuf, uint16_t length)
+{
+  (void)cmd;
+  (void)pbuf;
+  (void)length;
+  return (USBD_OK);
+}
+
+/* Data received over USB OUT endpoint are sent over CDC interface through this function */
+static int8_t CDC_Receive_FS(uint8_t* Buf, uint32_t *Len)
+{
+  /* Keep processing short: enqueue data for transmission (echo) */
+  uint32_t rlen32 = *Len;
+  uint16_t rlen = (rlen32 > APP_TX_DATA_SIZE) ? APP_TX_DATA_SIZE : (uint16_t)rlen32;
+
+  /* Try to enqueue; if queue full the packet will be dropped */
+  (void)CDC_Transmit_Enqueue(Buf, rlen);
+
+  /* Re-arm reception for next packet */
+  USBD_CDC_SetRxBuffer(&hUsbDeviceFS, &Buf[0]);
+  USBD_CDC_ReceivePacket(&hUsbDeviceFS);
+  return (USBD_OK);
+}
+
+/* Attempt immediate send, otherwise enqueue (non-blocking) */
+uint8_t CDC_Transmit_FS(uint8_t* Buf, uint16_t Len)
+{
+  USBD_CDC_HandleTypeDef *hcdc = (USBD_CDC_HandleTypeDef*)hUsbDeviceFS.pClassData;
+  if (hcdc && hcdc->TxState == 0)
+  {
+    USBD_CDC_SetTxBuffer(&hUsbDeviceFS, Buf, Len);
+    uint8_t res = USBD_CDC_TransmitPacket(&hUsbDeviceFS);
+    if (res == USBD_OK)
+    {
+      tx_busy_flag = 1;
+      return USBD_OK;
+    }
+    /* fallthrough to enqueue on failure/busy */
+  }
+
+  if (CDC_Transmit_Enqueue(Buf, Len) == 0) return USBD_OK;
+  return USBD_BUSY;
+}
+
+/* Enqueue implementation with short critical section to update head atomically */
+int CDC_Transmit_Enqueue(uint8_t* Buf, uint16_t Len)
+{
+  uint8_t next_head = (tx_q_head + 1) % TX_QUEUE_DEPTH;
+  if (next_head == tx_q_tail)
+  {
+    /* queue full */
+    return -1;
+  }
+  if (Len > APP_TX_DATA_SIZE) Len = APP_TX_DATA_SIZE; /* Truncate if too long */
+
+  /* copy user data into queue slot */
+  memcpy(tx_q_buf[tx_q_head], Buf, Len);
+
+  /* brief critical section while we update length and head */
+  __disable_irq();
+  tx_q_len[tx_q_head] = Len;
+  tx_q_head = next_head;
+  __enable_irq();
+
+  return 0;
+}
+
+/* Called from main loop to send data from the queue.
+   Set tx_busy_flag only after the transmit successfully starts. */
+void CDC_ProcessTxQueue(void)
+{
+  if (tx_busy_flag) return;
+  if (tx_q_head == tx_q_tail) return; /* empty */
+
+  uint8_t idx = tx_q_tail;
+  USBD_CDC_SetTxBuffer(&hUsbDeviceFS, tx_q_buf[idx], tx_q_len[idx]);
+  if (USBD_CDC_TransmitPacket(&hUsbDeviceFS) == USBD_OK)
+  {
+    /* advance tail and mark busy in a brief critical section */
+    __disable_irq();
+    tx_q_tail = (tx_q_tail + 1) % TX_QUEUE_DEPTH;
+    tx_busy_flag = 1;
+    __enable_irq();
+  }
+  /* if transmit failed (busy/fail) we leave tx_busy_flag cleared so main loop will try again later */
+}
+
+/* Called by USB stack when TX completes */
+int8_t CDC_TransmitCplt_FS(uint8_t* Buf, uint32_t *Len, uint8_t epnum)
+{
+  (void)Buf;
+  (void)Len;
+  (void)epnum;
+
+  tx_busy_flag = 0;
+
+  /* Optional: trigger immediate dequeue to send next packet faster */
+  /* CDC_ProcessTxQueue(); */
+
+  return (USBD_OK);
+}

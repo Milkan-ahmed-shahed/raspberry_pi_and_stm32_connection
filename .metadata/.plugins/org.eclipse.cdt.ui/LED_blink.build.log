@@ -1,0 +1,20 @@
+19:38:11 **** Incremental Build of configuration Debug for project LED_blink ****
+make -j4 all 
+arm-none-eabi-gcc "../USB_DEVICE/App/usbd_cdc_if.c" -mcpu=cortex-m3 -std=gnu11 -g3 -DDEBUG -DUSE_HAL_DRIVER -DSTM32F103xB -c -I../Core/Inc -I../Drivers/STM32F1xx_HAL_Driver/Inc/Legacy -I../Drivers/STM32F1xx_HAL_Driver/Inc -I../Drivers/CMSIS/Device/ST/STM32F1xx/Include -I../Drivers/CMSIS/Include -I../USB_DEVICE/App -I../USB_DEVICE/Target -I../Middlewares/ST/STM32_USB_Device_Library/Core/Inc -I../Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Inc -O0 -ffunction-sections -fdata-sections -Wall -fstack-usage -fcyclomatic-complexity -MMD -MP -MF"USB_DEVICE/App/usbd_cdc_if.d" -MT"USB_DEVICE/App/usbd_cdc_if.o" --specs=nano.specs -mfloat-abi=soft -mthumb -o "USB_DEVICE/App/usbd_cdc_if.o"
+arm-none-eabi-g++ -o "LED_blink.elf" @"objects.list"   -mcpu=cortex-m3 -T"F:\01 Milkan Importants\03 Capstone project\CP2\stm32_codes\LED_blink\STM32F103C8TX_FLASH.ld" --specs=nosys.specs -Wl,-Map="LED_blink.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -lstdc++ -lsupc++ -Wl,--end-group
+Finished building target: LED_blink.elf
+ 
+arm-none-eabi-size  LED_blink.elf 
+arm-none-eabi-objdump -h -S LED_blink.elf  > "LED_blink.list"
+arm-none-eabi-objcopy  -O ihex LED_blink.elf  "LED_blink.hex"
+   text	   data	    bss	    dec	    hex	filename
+  30236	    380	   6116	  36732	   8f7c	LED_blink.elf
+Finished building: default.size.stdout
+ 
+Finished building: LED_blink.hex
+ 
+Finished building: LED_blink.list
+ 
+
+19:38:12 Build Finished. 0 errors, 0 warnings. (took 830ms)
+

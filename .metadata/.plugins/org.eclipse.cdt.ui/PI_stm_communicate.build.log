@@ -1,5 +1,8 @@
-02:20:03 **** Incremental Build of configuration Debug for project PI_stm_communicate ****
+13:05:29 **** Incremental Build of configuration Debug for project PI_stm_communicate ****
 make -j4 all 
+arm-none-eabi-gcc "../USB_DEVICE/App/usb_device.c" -mcpu=cortex-m3 -std=gnu11 -g3 -DDEBUG -DUSE_HAL_DRIVER -DSTM32F103xB -c -I../Core/Inc -I../Drivers/STM32F1xx_HAL_Driver/Inc/Legacy -I../Drivers/STM32F1xx_HAL_Driver/Inc -I../Drivers/CMSIS/Device/ST/STM32F1xx/Include -I../Drivers/CMSIS/Include -I../USB_DEVICE/App -I../USB_DEVICE/Target -I../Middlewares/ST/STM32_USB_Device_Library/Core/Inc -I../Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Inc -O0 -ffunction-sections -fdata-sections -Wall -fstack-usage -fcyclomatic-complexity -MMD -MP -MF"USB_DEVICE/App/usb_device.d" -MT"USB_DEVICE/App/usb_device.o" --specs=nano.specs -mfloat-abi=soft -mthumb -o "USB_DEVICE/App/usb_device.o"
+arm-none-eabi-gcc "../USB_DEVICE/App/usbd_cdc_if.c" -mcpu=cortex-m3 -std=gnu11 -g3 -DDEBUG -DUSE_HAL_DRIVER -DSTM32F103xB -c -I../Core/Inc -I../Drivers/STM32F1xx_HAL_Driver/Inc/Legacy -I../Drivers/STM32F1xx_HAL_Driver/Inc -I../Drivers/CMSIS/Device/ST/STM32F1xx/Include -I../Drivers/CMSIS/Include -I../USB_DEVICE/App -I../USB_DEVICE/Target -I../Middlewares/ST/STM32_USB_Device_Library/Core/Inc -I../Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Inc -O0 -ffunction-sections -fdata-sections -Wall -fstack-usage -fcyclomatic-complexity -MMD -MP -MF"USB_DEVICE/App/usbd_cdc_if.d" -MT"USB_DEVICE/App/usbd_cdc_if.o" --specs=nano.specs -mfloat-abi=soft -mthumb -o "USB_DEVICE/App/usbd_cdc_if.o"
+arm-none-eabi-gcc "../Core/Src/main.c" -mcpu=cortex-m3 -std=gnu11 -g3 -DDEBUG -DUSE_HAL_DRIVER -DSTM32F103xB -c -I../Core/Inc -I../Drivers/STM32F1xx_HAL_Driver/Inc/Legacy -I../Drivers/STM32F1xx_HAL_Driver/Inc -I../Drivers/CMSIS/Device/ST/STM32F1xx/Include -I../Drivers/CMSIS/Include -I../USB_DEVICE/App -I../USB_DEVICE/Target -I../Middlewares/ST/STM32_USB_Device_Library/Core/Inc -I../Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Inc -O0 -ffunction-sections -fdata-sections -Wall -fstack-usage -fcyclomatic-complexity -MMD -MP -MF"Core/Src/main.d" -MT"Core/Src/main.o" --specs=nano.specs -mfloat-abi=soft -mthumb -o "Core/Src/main.o"
 arm-none-eabi-gcc -o "PI_stm_communicate.elf" @"objects.list"   -mcpu=cortex-m3 -T"F:\01 Milkan Importants\03 Capstone project\CP2\stm32_codes\PI_stm_communicate\STM32F103C8TX_FLASH.ld" --specs=nosys.specs -Wl,-Map="PI_stm_communicate.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
 Finished building target: PI_stm_communicate.elf
  
@@ -7,13 +10,13 @@ arm-none-eabi-size  PI_stm_communicate.elf
 arm-none-eabi-objdump -h -S PI_stm_communicate.elf  > "PI_stm_communicate.list"
 arm-none-eabi-objcopy  -O ihex PI_stm_communicate.elf  "PI_stm_communicate.hex"
    text	   data	    bss	    dec	    hex	filename
-  29276	    380	   6116	  35772	   8bbc	PI_stm_communicate.elf
+  30588	    380	  10220	  41188	   a0e4	PI_stm_communicate.elf
 Finished building: default.size.stdout
- 
-Finished building: PI_stm_communicate.list
  
 Finished building: PI_stm_communicate.hex
  
+Finished building: PI_stm_communicate.list
+ 
 
-02:20:05 Build Finished. 0 errors, 0 warnings. (took 1s.715ms)
+13:05:32 Build Finished. 0 errors, 0 warnings. (took 2s.357ms)
 

@@ -1,0 +1,373 @@
+/* USER CODE BEGIN Header */
+/**
+  ******************************************************************************
+  * @file           : usbd_cdc_if.c
+  * @version        : v2.0_Cube
+  * @brief          : Usb device for Virtual Com Port.
+  ******************************************************************************
+  * @attention
+  *
+  * Copyright (c) 2025 STMicroelectronics.
+  * All rights reserved.
+  *
+  * This software is licensed under terms that can be found in the LICENSE file
+  * in the root directory of this software component.
+  * If no LICENSE file comes with this software, it is provided AS-IS.
+  *
+  ******************************************************************************
+  */
+/* USER CODE END Header */
+
+/* Includes ------------------------------------------------------------------*/
+#include "usbd_cdc_if.h"
+#include <string.h>
+#include "main.h"
+
+/* USER CODE BEGIN INCLUDE */
+
+/* USER CODE END INCLUDE */
+
+/* Private typedef -----------------------------------------------------------*/
+/* Private define ------------------------------------------------------------*/
+/* Private macro -------------------------------------------------------------*/
+
+/* USER CODE BEGIN PV */
+/* Private variables ---------------------------------------------------------*/
+#define TX_QUEUE_DEPTH 4
+static uint8_t tx_q_buf[TX_QUEUE_DEPTH][APP_TX_DATA_SIZE];
+static uint16_t tx_q_len[TX_QUEUE_DEPTH];
+static volatile uint8_t tx_q_head = 0; /* next free slot index */
+static volatile uint8_t tx_q_tail = 0; /* next slot to send */
+static volatile uint8_t tx_busy_flag = 0; /* 1 = a transfer is ongoing */
+/* USER CODE END PV */
+
+/** @addtogroup STM32_USB_OTG_DEVICE_LIBRARY
+  * @brief Usb device library.
+  * @{
+  */
+
+/** @addtogroup USBD_CDC_IF
+  * @{
+  */
+
+/** @defgroup USBD_CDC_IF_Private_TypesDefinitions USBD_CDC_IF_Private_TypesDefinitions
+  * @brief Private types.
+  * @{
+  */
+
+/* USER CODE BEGIN PRIVATE_TYPES */
+
+/* USER CODE END PRIVATE_TYPES */
+
+/**
+  * @}
+  */
+
+/** @defgroup USBD_CDC_IF_Private_Defines USBD_CDC_IF_Private_Defines
+  * @brief Private defines.
+  * @{
+  */
+
+/* USER CODE BEGIN PRIVATE_DEFINES */
+/* USER CODE END PRIVATE_DEFINES */
+
+/**
+  * @}
+  */
+
+/** @defgroup USBD_CDC_IF_Private_Macros USBD_CDC_IF_Private_Macros
+  * @brief Private macros.
+  * @{
+  */
+
+/* USER CODE BEGIN PRIVATE_MACRO */
+
+/* USER CODE END PRIVATE_MACRO */
+
+/**
+  * @}
+  */
+
+/** @defgroup USBD_CDC_IF_Private_Variables USBD_CDC_IF_Private_Variables
+  * @brief Private variables.
+  * @{
+  */
+/* Create buffer for reception and transmission           */
+/* It's up to user to redefine and/or remove those define */
+/** Received data over USB are stored in this buffer      */
+uint8_t UserRxBufferFS[APP_RX_DATA_SIZE];
+
+/** Data to send over USB CDC are stored in this buffer   */
+uint8_t UserTxBufferFS[APP_TX_DATA_SIZE];
+
+/* USER CODE BEGIN PRIVATE_VARIABLES */
+
+/* USER CODE END PRIVATE_VARIABLES */
+
+/**
+  * @}
+  */
+
+/** @defgroup USBD_CDC_IF_Exported_Variables USBD_CDC_IF_Exported_Variables
+  * @brief Public variables.
+  * @{
+  */
+
+extern USBD_HandleTypeDef hUsbDeviceFS;
+
+/* USER CODE BEGIN EXPORTED_VARIABLES */
+
+/* USER CODE END EXPORTED_VARIABLES */
+
+/**
+  * @}
+  */
+
+/** @defgroup USBD_CDC_IF_Private_FunctionPrototypes USBD_CDC_IF_Private_FunctionPrototypes
+  * @brief Private functions declaration.
+  * @{
+  */
+
+static int8_t CDC_Init_FS(void);
+static int8_t CDC_DeInit_FS(void);
+static int8_t CDC_Control_FS(uint8_t cmd, uint8_t* pbuf, uint16_t length);
+static int8_t CDC_Receive_FS(uint8_t* pbuf, uint32_t *Len);
+int  CDC_Transmit_Enqueue(uint8_t* Buf, uint16_t Len);
+void CDC_ProcessTxQueue(void);
+/* USER CODE BEGIN PRIVATE_FUNCTIONS_DECLARATION */
+
+/* USER CODE END PRIVATE_FUNCTIONS_DECLARATION */
+
+/**
+  * @}
+  */
+
+USBD_CDC_ItfTypeDef USBD_Interface_fops_FS =
+{
+  CDC_Init_FS,
+  CDC_DeInit_FS,
+  CDC_Control_FS,
+  CDC_Receive_FS
+};
+
+/* Private functions ---------------------------------------------------------*/
+/**
+  * @brief  Initializes the CDC media low layer over the FS USB IP
+  * @retval USBD_OK if all operations are OK else USBD_FAIL
+  */
+static int8_t CDC_Init_FS(void)
+{
+  /* USER CODE BEGIN 3 */
+	USBD_CDC_SetTxBuffer(&hUsbDeviceFS, UserTxBufferFS, 0);
+	  USBD_CDC_SetRxBuffer(&hUsbDeviceFS, UserRxBufferFS);
+
+	  // This line is critical
+	  USBD_CDC_ReceivePacket(&hUsbDeviceFS);
+
+	  return (USBD_OK);
+  /* USER CODE END 3 */
+}
+
+/**
+  * @brief  DeInitializes the CDC media low layer
+  * @retval USBD_OK if all operations are OK else USBD_FAIL
+  */
+static int8_t CDC_DeInit_FS(void)
+{
+  /* USER CODE BEGIN 4 */
+  return (USBD_OK);
+  /* USER CODE END 4 */
+}
+
+/**
+  * @brief  Manage the CDC class requests
+  * @param  cmd: Command code
+  * @param  pbuf: Buffer containing command data (request parameters)
+  * @param  length: Number of data to be sent (in bytes)
+  * @retval Result of the operation: USBD_OK if all operations are OK else USBD_FAIL
+  */
+static int8_t CDC_Control_FS(uint8_t cmd, uint8_t* pbuf, uint16_t length)
+{
+  /* USER CODE BEGIN 5 */
+  switch(cmd)
+  {
+    case CDC_SEND_ENCAPSULATED_COMMAND:
+
+    break;
+
+    case CDC_GET_ENCAPSULATED_RESPONSE:
+
+    break;
+
+    case CDC_SET_COMM_FEATURE:
+
+    break;
+
+    case CDC_GET_COMM_FEATURE:
+
+    break;
+
+    case CDC_CLEAR_COMM_FEATURE:
+
+    break;
+
+  /*******************************************************************************/
+  /* Line Coding Structure                                                       */
+  /*-----------------------------------------------------------------------------*/
+  /* Offset | Field       | Size | Value  | Description                          */
+  /* 0      | dwDTERate   |   4  | Number |Data terminal rate, in bits per second*/
+  /* 4      | bCharFormat |   1  | Number | Stop bits                            */
+  /*                                        0 - 1 Stop bit                       */
+  /*                                        1 - 1.5 Stop bits                    */
+  /*                                        2 - 2 Stop bits                      */
+  /* 5      | bParityType |  1   | Number | Parity                               */
+  /*                                        0 - None                             */
+  /*                                        1 - Odd                              */
+  /*                                        2 - Even                             */
+  /*                                        3 - Mark                             */
+  /*                                        4 - Space                            */
+  /* 6      | bDataBits  |   1   | Number Data bits (5, 6, 7, 8 or 16).          */
+  /*******************************************************************************/
+    case CDC_SET_LINE_CODING:
+
+    break;
+
+    case CDC_GET_LINE_CODING:
+
+    break;
+
+    case CDC_SET_CONTROL_LINE_STATE:
+
+    break;
+
+    case CDC_SEND_BREAK:
+
+    break;
+
+  default:
+    break;
+  }
+
+  return (USBD_OK);
+  /* USER CODE END 5 */
+}
+
+/**
+  * @brief  Data received over USB OUT endpoint are sent over CDC interface
+  *         through this function.
+  *
+  *         @note
+  *         This function will issue a NAK packet on any OUT packet received on
+  *         USB endpoint until exiting this function. If you exit this function
+  *         before transfer is complete on CDC interface (ie. using DMA controller)
+  *         it will result in receiving more data while previous ones are still
+  *         not sent.
+  *
+  * @param  Buf: Buffer of data to be received
+  * @param  Len: Number of data received (in bytes)
+  * @retval Result of the operation: USBD_OK if all operations are OK else USBD_FAIL
+  */
+static int8_t CDC_Receive_FS(uint8_t* Buf, uint32_t *Len)
+{
+	/* USER CODE BEGIN 6 */
+	// We got data (Buf, Len). Add it to the "to-do" list to be echoed.
+	  CDC_Transmit_Enqueue(Buf, *Len);
+
+	  // Re-arm the USB port to listen for the *next* packet.
+	  USBD_CDC_SetRxBuffer(&hUsbDeviceFS, &Buf[0]);
+	  USBD_CDC_ReceivePacket(&hUsbDeviceFS);
+	  return (USBD_OK);
+	  /* USER CODE END 6 */
+}
+
+/**
+  * @brief  CDC_Transmit_FS
+  *         Data to send over USB IN endpoint are sent over CDC interface
+  *         through this function.
+  *         @note
+  *
+  *
+  * @param  Buf: Buffer of data to be sent
+  * @param  Len: Number of data to be sent (in bytes)
+  * @retval USBD_OK if all operations are OK else USBD_FAIL or USBD_BUSY
+  */
+uint8_t CDC_Transmit_FS(uint8_t* Buf, uint16_t Len)
+{
+  /* USER CODE BEGIN 7 */
+	// This function is now just a wrapper for our queue
+	  if (CDC_Transmit_Enqueue(Buf, Len) == 0)
+	  {
+	      return USBD_OK; // Successfully added to queue
+	  }
+	  else
+	  {
+	      return USBD_BUSY; // Queue was full
+	  }
+  /* USER CODE END 7 */
+}
+
+/* USER CODE BEGIN PRIVATE_FUNCTIONS_IMPLEMENTATION */
+int CDC_Transmit_Enqueue(uint8_t* Buf, uint16_t Len)
+{
+  uint8_t next_head = (tx_q_head + 1) % TX_QUEUE_DEPTH;
+  if (next_head == tx_q_tail)
+  {
+    /* queue full */
+    return -1;
+  }
+  if (Len > APP_TX_DATA_SIZE) Len = APP_TX_DATA_SIZE; // Truncate if too long
+
+  memcpy(tx_q_buf[tx_q_head], Buf, Len);
+  tx_q_len[tx_q_head] = Len;
+  tx_q_head = next_head;
+  return 0;
+}
+
+/**
+  * @brief  Called from main loop to send data from the queue.
+  */
+void CDC_ProcessTxQueue(void)
+{
+  if (tx_busy_flag == 1) return; // A transfer is already in progress
+  if (tx_q_head == tx_q_tail) return; // Queue is empty
+
+  tx_busy_flag = 1; // Mark as busy
+  uint8_t idx = tx_q_tail;
+
+  USBD_CDC_SetTxBuffer(&hUsbDeviceFS, tx_q_buf[idx], tx_q_len[idx]);
+
+  if (USBD_CDC_TransmitPacket(&hUsbDeviceFS) == USBD_OK)
+  {
+    tx_q_tail = (tx_q_tail + 1) % TX_QUEUE_DEPTH;
+  }
+  else
+  {
+    tx_busy_flag = 0; // Send failed, clear flag to try again
+  }
+}
+
+/**
+  * @brief  Callback called by USB stack when TX is complete.
+  */
+int8_t CDC_TransmitCplt_FS(uint8_t* Buf, uint32_t *Len, uint8_t epnum)
+{
+  (void)Buf;
+  (void)Len;
+  (void)epnum;
+
+  tx_busy_flag = 0; // Mark as not busy
+
+  /* We just finished, so try to send the next packet from the main loop */
+  // CDC_ProcessTxQueue(); // We can call this from main.c loop instead
+
+  return (USBD_OK);
+}
+/* USER CODE END PRIVATE_FUNCTIONS_IMPLEMENTATION */
+
+/**
+  * @}
+  */
+
+/**
+  * @}
+  */
