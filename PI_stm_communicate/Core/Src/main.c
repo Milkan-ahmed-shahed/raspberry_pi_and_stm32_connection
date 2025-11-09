@@ -10,9 +10,21 @@
 #include "main.h"
 #include "usb_device.h"
 #include "usbd_cdc_if.h"
+#include "motion_executor.h"
 
-#include <string.h>  /* strcmp, strcspn */
+#include <string.h>  /* strcmp, strcspn, strstr, strncmp */
 #include <stdio.h>   /* snprintf */
+#include <stdlib.h>  /* strtol */
+
+/* Fallbacks in case your current usbd_cdc_if.h doesn't provide these */
+#ifndef RX_BUFFER_SIZE
+#define RX_BUFFER_SIZE 64
+#endif
+#ifndef CDC_HELPERS_DECLARED
+/* If usbd_cdc_if.h already declares these, duplicate prototypes are harmless */
+int  CDC_Transmit_Enqueue(uint8_t* Buf, uint16_t Len);
+void CDC_ProcessTxQueue(void);
+#endif
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
@@ -38,6 +50,9 @@ int main(void)
   MX_GPIO_Init();
   MX_USB_DEVICE_Init();
 
+  /* Initialize X-axis motion (TIM2, PA0 step, PA1 dir) */
+  Motion_InitX();
+
   /* Infinite loop */
   while (1)
   {
@@ -55,7 +70,35 @@ int main(void)
       /* Default: invalid until matched */
       int valid = 0;
 
-      if (strcmp(command, "A") == 0) {
+      /* MOVE command, e.g. "MOVE X100 S600" */
+      if (strncmp(command, "MOVE", 4) == 0) {
+        int32_t  x_mm        = 0;
+        uint32_t feed_mm_min = 300; /* default speed */
+
+        char *xptr = strstr(command, "X");
+        if (xptr) {
+          x_mm = (int32_t)strtol(xptr + 1, NULL, 10);
+        } else {
+          valid = 0;
+          goto send_reply;
+        }
+
+        char *sptr = strstr(command, "S");
+        if (sptr) {
+          long s = strtol(sptr + 1, NULL, 10);
+          if (s > 0) feed_mm_min = (uint32_t)s;
+        }
+
+        if (!Motion_X_IsBusy()) {
+          valid = Move_X(x_mm, feed_mm_min) ? 1 : 0;
+        } else {
+          /* Already moving */
+          uint8_t msg[] = "BUSY\r\n";
+          CDC_Transmit_Enqueue(msg, sizeof(msg) - 1);
+          valid = 0; /* will also emit ERR below */
+        }
+      }
+      else if (strcmp(command, "A") == 0) {
         blink_duration_ms = 5000;  /* 5s */
         blink_delay_ms    = 100;   /* fast */
         valid = 1;
@@ -69,8 +112,9 @@ int main(void)
         valid = 1;
       }
 
+send_reply:
       /* Send ACK/ERR */
-      uint8_t ack[32];
+      uint8_t ack[64];
       int n = snprintf((char*)ack, sizeof(ack),
                        valid ? "ACK %s OK\r\n" : "ERR %s\r\n", command);
       if (n < 0) n = 0;

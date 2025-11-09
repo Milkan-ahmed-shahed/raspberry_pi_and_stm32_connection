@@ -56,6 +56,8 @@
 
 /* External variables --------------------------------------------------------*/
 extern PCD_HandleTypeDef hpcd_USB_FS;
+extern TIM_HandleTypeDef htim2;
+extern void Motion_TIM2_IRQHandler(void);
 /* USER CODE BEGIN EV */
 
 /* USER CODE END EV */
@@ -210,6 +212,14 @@ void USB_LP_CAN1_RX0_IRQHandler(void)
   /* USER CODE BEGIN USB_LP_CAN1_RX0_IRQn 1 */
 
   /* USER CODE END USB_LP_CAN1_RX0_IRQn 1 */
+}
+
+/**
+  * @brief This function handles TIM2 global interrupt.
+  */
+void TIM2_IRQHandler(void)
+{
+  Motion_TIM2_IRQHandler();
 }
 
 /* USER CODE BEGIN 1 */

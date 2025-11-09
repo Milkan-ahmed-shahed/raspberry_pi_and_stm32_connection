@@ -3,7 +3,7 @@
   ******************************************************************************
   * @file           : usbd_cdc_if.c
   * @version        : v2.0_Cube
-  * @brief          : Usb device for Virtual Com Port.
+  * @brief          : USB device CDC interface (Virtual COM Port)
   ******************************************************************************
   */
 /* USER CODE END Header */
@@ -20,10 +20,6 @@ static volatile uint8_t tx_q_head = 0;
 static volatile uint8_t tx_q_tail = 0;
 static volatile uint8_t tx_busy_flag = 0;
 
-/* Shared RX flag/buffer provided by main.c */
-//uint8_t g_usb_rx_buffer[RX_BUFFER_SIZE];
-//volatile uint8_t g_new_usb_data = 0;
-
 /* Forward declarations for CDC fops (must be before fops struct) */
 static int8_t CDC_Init_FS(void);
 static int8_t CDC_DeInit_FS(void);
@@ -32,9 +28,9 @@ static int8_t CDC_Receive_FS(uint8_t* pbuf, uint32_t *Len);
 
 /* IMPORTANT: external linkage callbacks the middleware may call */
 int8_t CDC_TransmitCplt_FS(uint8_t* Buf, uint32_t *Len, uint8_t epnum);   /* some stacks call this */
-void   USBD_CDC_TransmitCplt(USBD_HandleTypeDef *pdev, uint8_t epnum);   /* other stacks call this */
+void   USBD_CDC_TransmitCplt(USBD_HandleTypeDef *pdev, uint8_t epnum);    /* other stacks call this */
 
-/* Queue helpers */
+/* Queue helpers (exported in header) */
 int  CDC_Transmit_Enqueue(uint8_t* Buf, uint16_t Len);
 void CDC_ProcessTxQueue(void);
 
@@ -42,6 +38,7 @@ void CDC_ProcessTxQueue(void);
 uint8_t UserRxBufferFS[APP_RX_DATA_SIZE];
 uint8_t UserTxBufferFS[APP_TX_DATA_SIZE];
 
+/* Provided by the device core */
 extern USBD_HandleTypeDef hUsbDeviceFS;
 
 /* USBD interface callbacks (exactly 4 entries) */
@@ -56,6 +53,7 @@ USBD_CDC_ItfTypeDef USBD_Interface_fops_FS =
 /* Init ----------------------------------------------------------------------*/
 static int8_t CDC_Init_FS(void)
 {
+  /* Set buffers */
   USBD_CDC_SetTxBuffer(&hUsbDeviceFS, UserTxBufferFS, 0);
   USBD_CDC_SetRxBuffer(&hUsbDeviceFS, UserRxBufferFS);
 
@@ -71,13 +69,46 @@ static int8_t CDC_DeInit_FS(void)
 
 static int8_t CDC_Control_FS(uint8_t cmd, uint8_t* pbuf, uint16_t length)
 {
-  (void)cmd; (void)pbuf; (void)length;
+  (void)pbuf;
+  (void)length;
+
+  switch (cmd)
+  {
+    case CDC_SEND_ENCAPSULATED_COMMAND: break;
+    case CDC_GET_ENCAPSULATED_RESPONSE: break;
+    case CDC_SET_COMM_FEATURE:          break;
+    case CDC_GET_COMM_FEATURE:          break;
+    case CDC_CLEAR_COMM_FEATURE:        break;
+
+    case CDC_SET_LINE_CODING:
+      /* Optionally parse pbuf for baud settings if needed by host tooling */
+      break;
+
+    case CDC_GET_LINE_CODING:
+      /* Optionally report current line coding if needed */
+      break;
+
+    case CDC_SET_CONTROL_LINE_STATE:
+      /* Optionally observe DTR/RTS from host here */
+      break;
+
+    case CDC_SEND_BREAK:                break;
+    default:                            break;
+  }
   return (USBD_OK);
 }
 
 /* Receive: copy data into a small buffer and raise a flag for the main loop */
 static int8_t CDC_Receive_FS(uint8_t* Buf, uint32_t *Len)
 {
+  /* RX_BUFFER_SIZE and externs are declared in usbd_cdc_if.h;
+     ensure null-terminated copy for simple line parsing in main.c */
+#ifndef RX_BUFFER_SIZE
+#define RX_BUFFER_SIZE 64
+#endif
+  extern uint8_t g_usb_rx_buffer[RX_BUFFER_SIZE];
+  extern volatile uint8_t g_new_usb_data;
+
   uint32_t copy_len = (*Len < (RX_BUFFER_SIZE - 1)) ? *Len : (RX_BUFFER_SIZE - 1);
   memcpy(g_usb_rx_buffer, Buf, copy_len);
   g_usb_rx_buffer[copy_len] = '\0';
@@ -94,6 +125,7 @@ static int8_t CDC_Receive_FS(uint8_t* Buf, uint32_t *Len)
 uint8_t CDC_Transmit_FS(uint8_t* Buf, uint16_t Len)
 {
   USBD_CDC_HandleTypeDef *hcdc = (USBD_CDC_HandleTypeDef*)hUsbDeviceFS.pClassData;
+
   if (hcdc && hcdc->TxState == 0)
   {
     USBD_CDC_SetTxBuffer(&hUsbDeviceFS, Buf, Len);
@@ -106,7 +138,13 @@ uint8_t CDC_Transmit_FS(uint8_t* Buf, uint16_t Len)
     /* else fallthrough to enqueue */
   }
 
-  if (CDC_Transmit_Enqueue(Buf, Len) == 0) return USBD_OK;
+  if (CDC_Transmit_Enqueue(Buf, Len) == 0)
+  {
+    /* Kick the queue so transmit starts immediately if idle */
+    CDC_ProcessTxQueue();
+    return USBD_OK;
+  }
+
   return USBD_BUSY;
 }
 
