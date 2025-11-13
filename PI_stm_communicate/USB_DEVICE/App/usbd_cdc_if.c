@@ -27,8 +27,8 @@ static int8_t CDC_Control_FS(uint8_t cmd, uint8_t* pbuf, uint16_t length);
 static int8_t CDC_Receive_FS(uint8_t* pbuf, uint32_t *Len);
 
 /* IMPORTANT: external linkage callbacks the middleware may call */
-int8_t CDC_TransmitCplt_FS(uint8_t* Buf, uint32_t *Len, uint8_t epnum);   /* some stacks call this */
-void   USBD_CDC_TransmitCplt(USBD_HandleTypeDef *pdev, uint8_t epnum);    /* other stacks call this */
+int8_t CDC_TransmitCplt_FS(uint8_t* Buf, uint32_t *Len, uint8_t epnum);
+void   USBD_CDC_TransmitCplt(USBD_HandleTypeDef *pdev, uint8_t epnum);
 
 /* Queue helpers (exported in header) */
 int  CDC_Transmit_Enqueue(uint8_t* Buf, uint16_t Len);
@@ -69,31 +69,13 @@ static int8_t CDC_DeInit_FS(void)
 
 static int8_t CDC_Control_FS(uint8_t cmd, uint8_t* pbuf, uint16_t length)
 {
-  (void)pbuf;
-  (void)length;
-
+  (void)pbuf; (void)length;
   switch (cmd)
   {
-    case CDC_SEND_ENCAPSULATED_COMMAND: break;
-    case CDC_GET_ENCAPSULATED_RESPONSE: break;
-    case CDC_SET_COMM_FEATURE:          break;
-    case CDC_GET_COMM_FEATURE:          break;
-    case CDC_CLEAR_COMM_FEATURE:        break;
-
-    case CDC_SET_LINE_CODING:
-      /* Optionally parse pbuf for baud settings if needed by host tooling */
-      break;
-
-    case CDC_GET_LINE_CODING:
-      /* Optionally report current line coding if needed */
-      break;
-
-    case CDC_SET_CONTROL_LINE_STATE:
-      /* Optionally observe DTR/RTS from host here */
-      break;
-
-    case CDC_SEND_BREAK:                break;
-    default:                            break;
+    case CDC_SET_LINE_CODING: break;
+    case CDC_GET_LINE_CODING: break;
+    case CDC_SET_CONTROL_LINE_STATE: break;
+    default: break;
   }
   return (USBD_OK);
 }
@@ -101,8 +83,6 @@ static int8_t CDC_Control_FS(uint8_t cmd, uint8_t* pbuf, uint16_t length)
 /* Receive: copy data into a small buffer and raise a flag for the main loop */
 static int8_t CDC_Receive_FS(uint8_t* Buf, uint32_t *Len)
 {
-  /* RX_BUFFER_SIZE and externs are declared in usbd_cdc_if.h;
-     ensure null-terminated copy for simple line parsing in main.c */
 #ifndef RX_BUFFER_SIZE
 #define RX_BUFFER_SIZE 64
 #endif
@@ -165,14 +145,11 @@ int CDC_Transmit_Enqueue(uint8_t* Buf, uint16_t Len)
   return 0;
 }
 
-/* Dequeue/send next if not busy.
-   Robustness: if the stack cleared TxState but our callback didn’t fire,
-   auto-clear tx_busy_flag here when hcdc->TxState == 0. */
+/* Dequeue/send next if not busy. */
 void CDC_ProcessTxQueue(void)
 {
   USBD_CDC_HandleTypeDef *hcdc = (USBD_CDC_HandleTypeDef*)hUsbDeviceFS.pClassData;
 
-  /* Recover if class says idle but our flag is stuck */
   if (tx_busy_flag && hcdc && hcdc->TxState == 0)
   {
     tx_busy_flag = 0;
@@ -192,22 +169,17 @@ void CDC_ProcessTxQueue(void)
   }
 }
 
-/* TX complete variant 1: some stacks call this (CubeMX “FS” template) */
 int8_t CDC_TransmitCplt_FS(uint8_t* Buf, uint32_t *Len, uint8_t epnum)
 {
   (void)Buf; (void)Len; (void)epnum;
-
   tx_busy_flag = 0;
-  CDC_ProcessTxQueue(); /* kick next */
-
+  CDC_ProcessTxQueue();
   return (USBD_OK);
 }
 
-/* TX complete variant 2: other stacks call this weak symbol from usbd_cdc.c */
 void USBD_CDC_TransmitCplt(USBD_HandleTypeDef *pdev, uint8_t epnum)
 {
   (void)pdev; (void)epnum;
-
   tx_busy_flag = 0;
-  CDC_ProcessTxQueue(); /* kick next */
+  CDC_ProcessTxQueue();
 }

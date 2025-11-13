@@ -6,39 +6,97 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-// Pin map for X-axis
-#define X_STEP_GPIO_PORT   GPIOA
-#define X_STEP_GPIO_PIN    GPIO_PIN_0     // TIM2_CH1 (PA0)
-#define X_DIR_GPIO_PORT    GPIOA
-#define X_DIR_GPIO_PIN     GPIO_PIN_1     // DIR output (GPIO)
+/* Pin Map (Blue Pill)
+ * X Axis: STEP PA0 (TIM2_CH1), DIR PA1, ENA PA2
+ * Y Axis: STEP PA3 (TIM2_CH4), DIR PA4, ENA PA5
+ */
+#define X_STEP_GPIO_PORT      GPIOA
+#define X_STEP_GPIO_PIN       GPIO_PIN_0
+#define X_DIR_GPIO_PORT       GPIOA
+#define X_DIR_GPIO_PIN        GPIO_PIN_1
+#define X_ENA_GPIO_PORT       GPIOA
+#define X_ENA_GPIO_PIN        GPIO_PIN_2
 
-// Motion parameters
-#define X_STEPS_PER_MM     80U            // GT2 belt, 20T pulley -> 80 steps/mm (with configured microstepping)
+#define Y_STEP_GPIO_PORT      GPIOA
+#define Y_STEP_GPIO_PIN       GPIO_PIN_3
+#define Y_DIR_GPIO_PORT       GPIOA
+#define Y_DIR_GPIO_PIN        GPIO_PIN_4
+#define Y_ENA_GPIO_PORT       GPIOA
+#define Y_ENA_GPIO_PIN        GPIO_PIN_5
 
-// Public X-axis state
+/* Mechanics / profile */
+#define XY_STEPS_PER_MM               80U
+#define MAX_VELOCITY_MM_MIN           5000U          /* global cap (mm/min) */
+
+/* Timer base:
+ * For 48 MHz TIM2 clock, PSC=71 => tick = 48e6 / 72 = 666666.7 Hz
+ */
+#define TIM2_FIXED_PSC                71U
+
+/* Pre-calculated trapezoid buffer capacity (ARR values for accel/decel) */
+#ifndef RAMP_BUFFER_SIZE
+#define RAMP_BUFFER_SIZE              512U           /* tune per SRAM budget */
+#endif
+
+/* Ramp state machine (master axis only) */
+typedef enum {
+    RAMP_IDLE = 0,
+    RAMP_UP,
+    RAMP_CONST,
+    RAMP_DOWN
+} RampState;
+
+/* Unified gantry motion state (no floating point fields) */
 typedef struct {
     volatile bool     busy;
-    volatile uint32_t target_steps;
-    volatile uint32_t steps_done;
-    volatile bool     dir_positive;       // true if moving +X, false if -X
-} MotionXState;
 
-// Initialize GPIO and TIM2 for X-axis motion (does not start motion)
-void Motion_InitX(void);
+    /* Total steps for each axis (absolute distances) */
+    volatile uint32_t x_total_steps;
+    volatile uint32_t y_total_steps;
 
-// Start a non-blocking move on X axis.
-// - target_mm can be positive (forward) or negative (reverse).
-// - speed_mm_min is the linear speed in mm/min (must be > 0).
-// Returns true if the move was started, false if busy or invalid params.
-bool Move_X(int32_t target_mm, uint32_t speed_mm_min);
+    /* Direction flags */
+    volatile bool     x_dir_positive;
+    volatile bool     y_dir_positive;
 
-// Query if X-axis is currently moving
-bool Motion_X_IsBusy(void);
+    /* Master/slave selection */
+    volatile bool     master_is_x;          /* true => X drives timing; false => Y drives */
+    volatile uint32_t master_total_steps;   /* convenience copy */
+    volatile uint32_t slave_total_steps;    /* convenience copy */
 
-// Immediately stop X motion (best-effort stop at next interrupt boundary)
-void Motion_X_Stop(void);
+    /* Execution counters */
+    volatile uint32_t steps_done_master;
+    volatile uint32_t steps_done_slave;
 
-// Accessor for state (read-only)
-const MotionXState* Motion_X_GetState(void);
+    /* Ramping boundaries (in master steps) */
+    volatile uint32_t steps_to_accel;       /* length of acceleration segment (master) */
+    volatile uint32_t steps_to_decel;       /* first master step index where decel starts */
+    volatile RampState ramp_state;
 
-#endif // MOTION_EXECUTOR_H
+    /* Timing data (all integer) */
+    volatile uint16_t vmax_arr;             /* ARR value for constant Vmax */
+    volatile uint16_t current_arr;          /* current ARR (period -1) */
+
+    /* Pre-calculated trapezoid (ARR per step) for accel; decel is mirrored.
+       ramp_len == steps_to_accel, capped to buffer size. */
+    volatile uint16_t ramp_buffer[RAMP_BUFFER_SIZE];
+    volatile uint32_t ramp_len;
+
+    /* Bresenham-style accumulator for slave axis (integer only).
+       Each master step: acc += slave_total_steps; if acc >= 0 -> enable slave channel,
+       then acc -= master_total_steps. */
+    volatile int32_t  y_accumulator;
+
+} GantryState;
+
+/* API */
+void Motion_InitXY(void);
+bool Move_Gantry_XY(int32_t x_mm, int32_t y_mm, uint32_t speed_mm_min);
+bool Move_X(int32_t x_mm, uint32_t speed_mm_min);
+bool Motion_XY_IsBusy(void);
+void Motion_XY_Stop(void);
+const GantryState* Motion_XY_GetState(void);
+
+/* IRQ trampoline (called from TIM2_IRQHandler in stm32f1xx_it.c) */
+void Motion_TIM2_IRQHandler(void);
+
+#endif /* MOTION_EXECUTOR_H */
